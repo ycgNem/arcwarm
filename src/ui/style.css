@@ -150,6 +150,10 @@ canvas#game {
   letter-spacing: 0.14em;
   color: #000a;
 }
+.hud-vitals.healing .bar {
+  border-color: #7dff9a;
+  box-shadow: 0 0 14px #5fe08a99;
+}
 .bar.shield.broken {
   animation: blink 0.35s steps(2) infinite;
   border-color: var(--danger);
@@ -163,6 +167,10 @@ canvas#game {
   position: absolute;
   right: 22px;
   bottom: 22px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 12px;
   text-align: right;
   font-family: var(--mono);
   font-size: 15px;
@@ -179,6 +187,7 @@ canvas#game {
   top: 10px;
   font: 12px var(--mono);
   color: var(--muted);
+  text-shadow: 0 1px 2px #000;
 }
 .center-msg {
   position: absolute;

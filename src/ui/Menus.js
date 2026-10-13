@@ -2,6 +2,7 @@
 import { BOT_LEVELS, BOT_ORDER } from '../data/bots.js';
 import { GRAVITY_PRESETS } from '../data/physics.js';
 import { MATCH } from '../data/match.js';
+import { MAPS, MAP_ORDER } from '../world/maps.js';
 import { DEFAULTS, DEFAULT_KEYS, saveSettings, cmPer360 } from '../core/Settings.js';
 import { qlFovToVertical } from '../core/math.js';
 
@@ -114,10 +115,12 @@ export class Menus {
     const p = this.panel('main');
     p.innerHTML = `
       <div class="logo">ARCWARM</div>
-      <div class="tagline">Low-gravity lightning gun duel · warm up your tracking on Pinehollow</div>
+      <div class="tagline">Low-gravity lightning gun duel · warm up your tracking</div>
+      <h3>Map</h3><div class="row" data-slot="map"></div>
       <h3>Opponent</h3><div data-slot="diff"></div>
       <h3>Match</h3><div class="row" data-slot="len"></div>
       <h3>Gravity</h3><div class="row" data-slot="grav"></div>
+      <h3>Lifesteal <span class="hint" style="text-transform:none;letter-spacing:0">· hits heal you, so the one who misses more loses</span></h3><div class="row" data-slot="ls"></div>
       <div class="actions">
         <button class="primary" data-a="play">PLAY</button>
         <button data-a="settings">Settings</button>
@@ -127,8 +130,29 @@ export class Menus {
       <p class="hint" style="margin-top:18px">
         <span class="kbd">WASD</span> move · <span class="kbd">Space</span> jump (hold to hop) · <span class="kbd">C</span> crouch, also mid-air for a higher jump ·
         <span class="kbd">Mouse1</span> beam · <span class="kbd">Tab</span> scores · <span class="kbd">Esc</span> pause.
-        Shields soak damage and recharge after ${4}s without being hit. Pads and the grav lift fling you around the map.
+        Shields soak damage and recharge after 4s without being hit. With lifesteal on, every hit heals you. Pads and the grav lift fling you around the map.
       </p>`;
+    p.querySelector('[data-slot="map"]').append(
+      this.segment(
+        MAP_ORDER.map((k) => [k, MAPS[k].label]),
+        s.map,
+        (v) => {
+          s.map = v;
+          saveSettings(s);
+          this.cb.onMapChange(v);
+        },
+      ),
+    );
+    p.querySelector('[data-slot="ls"]').append(
+      this.segment(
+        MATCH.lifesteal.map((l) => [l.v, `${l.label}${l.v ? ` <span class="hint">${Math.round(l.v * 100)}%</span>` : ''}`]),
+        s.lifesteal,
+        (v) => {
+          s.lifesteal = v;
+          saveSettings(s);
+        },
+      ),
+    );
     p.querySelector('[data-slot="diff"]').append(
       this.segment(
         BOT_ORDER.map((k) => [k, BOT_LEVELS[k].label]),
@@ -335,11 +359,11 @@ export class Menus {
     const m = r.you.miss;
     const mt = Math.max(1, m.ahead + m.behind + m.above + m.below);
     const bar = (k, label) => `<div class="miss"><span>${label}</span><div class="track"><div style="width:${(100 * m[k]) / mt}%"></div></div><span>${Math.round((100 * m[k]) / mt)}%</span></div>`;
-    const prev = loadHistory().filter((h) => h.difficulty === r.difficulty && h !== r);
+    const prev = loadHistory().filter((h) => h.difficulty === r.difficulty && (h.map ?? 'forest') === r.map);
     const best = prev.length ? Math.max(...prev.map((h) => h.you.acc)) : null;
     p.innerHTML = `
       <div class="result-head ${outcome[0]}">${outcome[1]}</div>
-      <div class="hint">${r.you.frags} – ${r.you.deaths} vs ${BOT_LEVELS[r.difficulty].label} Bot · ${GRAVITY_PRESETS[r.gravity].label} gravity · ${Math.round(r.seconds)}s</div>
+      <div class="hint">${r.you.frags} – ${r.you.deaths} vs ${BOT_LEVELS[r.difficulty].label} Bot · ${MAPS[r.map]?.label ?? ''} · ${GRAVITY_PRESETS[r.gravity].label} gravity · lifesteal ${r.lifesteal ? Math.round(r.lifesteal * 100) + '%' : 'off'} · ${Math.round(r.seconds)}s</div>
       <div class="stats">
         <div class="stat"><small>LG accuracy</small><b>${r.you.acc}%</b>${best != null ? `<div class="hint">best ${best}%</div>` : ''}</div>
         <div class="stat"><small>Damage</small><b>${r.you.dmg}</b><div class="hint">${Math.round((r.you.dmg / Math.max(1, r.seconds)) * 60)}/min</div></div>
@@ -347,7 +371,7 @@ export class Menus {
         <div class="stat"><small>Longest track</small><b>${r.you.track.toFixed(2)}s</b></div>
         <div class="stat"><small>vs airborne</small><b>${pct(r.you.airHits, r.you.airShots)}%</b></div>
         <div class="stat"><small>vs grounded</small><b>${pct(r.you.gndHits, r.you.gndShots)}%</b></div>
-        <div class="stat"><small>Shield breaks</small><b>${r.you.breaks}</b></div>
+        <div class="stat"><small>${r.lifesteal ? 'Healed' : 'Shield breaks'}</small><b>${r.lifesteal ? r.you.healed : r.you.breaks}</b></div>
         <div class="stat"><small>Bot's LG on you</small><b>${r.bot.acc}%</b></div>
       </div>
       <h3>Where your near-misses went</h3>
@@ -374,11 +398,11 @@ export class Menus {
       <h2>History</h2>
       ${
         h.length
-          ? `<table class="history"><tr><th>When</th><th>Bot</th><th>Grav</th><th>K–D</th><th>LG</th><th>Air</th><th>Track</th><th>Bot LG</th></tr>
+          ? `<table class="history"><tr><th>When</th><th>Map</th><th>Bot</th><th>Grav</th><th>LS</th><th>K–D</th><th>LG</th><th>Air</th><th>Track</th><th>Bot LG</th></tr>
         ${h
           .map(
             (r) =>
-              `<tr><td>${new Date(r.date).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td><td>${BOT_LEVELS[r.difficulty]?.label ?? r.difficulty}</td><td>${GRAVITY_PRESETS[r.gravity]?.label ?? r.gravity}</td><td>${r.you.frags}–${r.you.deaths}</td><td>${r.you.acc}%</td><td>${pct(r.you.airHits, r.you.airShots)}%</td><td>${r.you.track.toFixed(1)}s</td><td>${r.bot.acc}%</td></tr>`,
+              `<tr><td>${new Date(r.date).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td><td>${MAPS[r.map ?? 'forest']?.label ?? r.map}</td><td>${BOT_LEVELS[r.difficulty]?.label ?? r.difficulty}</td><td>${GRAVITY_PRESETS[r.gravity]?.label ?? r.gravity}</td><td>${r.lifesteal ? Math.round(r.lifesteal * 100) + '%' : '-'}</td><td>${r.you.frags}–${r.you.deaths}</td><td>${r.you.acc}%</td><td>${pct(r.you.airHits, r.you.airShots)}%</td><td>${r.you.track.toFixed(1)}s</td><td>${r.bot.acc}%</td></tr>`,
           )
           .join('')}</table>`
           : '<p class="hint">No matches yet.</p>'

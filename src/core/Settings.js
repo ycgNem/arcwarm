@@ -29,6 +29,8 @@ export const DEFAULTS = {
   volume: 0.7,
   hitsound: true,
   gravity: 'halo',
+  map: 'forest',
+  lifesteal: 1, // fraction of damage dealt that heals you (see MATCH.lifesteal)
   difficulty: 'hard',
   length: 180,
   showFps: true,

@@ -5,6 +5,7 @@ import { VITALS } from '../src/data/match.js';
 import { World } from '../src/world/World.js';
 import { Heightfield } from '../src/world/Heightfield.js';
 import { buildForestLayout } from '../src/world/forestLayout.js';
+import { buildWhiteRoomLayout } from '../src/world/whiteroomLayout.js';
 import { NavGrid } from '../src/world/NavGrid.js';
 import { makeBody, placeBody, stepBody } from '../src/game/Movement.js';
 
@@ -275,6 +276,76 @@ for (const p of layout.pads) {
   const off = run(HULL.halfWidth * 2 + 2);
   check('hitreg: perfect tracking of a dodging bot', on.hits / on.shots > 0.97, `${((100 * on.hits) / on.shots).toFixed(1)}% of ${on.shots} (air ${on.airShots})`);
   check('hitreg: aiming a hitbox-width off misses', off.hits === 0, `${off.hits} hits`);
+}
+
+// --- White Room: ramps, crouch-jump onto a platform, spawns, nav ---
+{
+  const wr = new World(buildWhiteRoomLayout());
+  const walk = (x, y, z, wish, ticks, extra = () => ({})) => {
+    const b = makeBody();
+    placeBody(b, x, y + 0.5, z);
+    settle(b, wr, halo, 10);
+    let maxAir = 0;
+    for (let i = 0; i < ticks; i++) {
+      stepBody(b, cmd({ ...wish, ...extra(i, b) }), TICK, wr, halo);
+      if (i > 2) maxAir = Math.max(maxAir, b.airTime);
+    }
+    return { b, maxAir };
+  };
+  const up = walk(0, 0, -100, { wishZ: -1 }, 250);
+  check('white room: walk up the ramp onto the platform', Math.abs(up.b.y - 116) < 0.01 && up.b.z < -500, `y=${f1(up.b.y)} z=${f1(up.b.z)}, never airborne (${up.maxAir.toFixed(3)}s)`);
+  const down = walk(0, 116, -600, { wishZ: 1 }, 250);
+  check('white room: walk down the ramp stays grounded', down.b.y < 0.5 && down.b.z > -200 && down.maxAir < 0.02, `y=${f1(down.b.y)} z=${f1(down.b.z)}, max air ${down.maxAir.toFixed(3)}s`);
+  const side = walk(-160, 0, -380, { wishX: 1 }, 125);
+  check('white room: ramp side is a wall', side.b.x + 15 <= -70 + 0.05 && side.b.y < 1, `hull edge x=${f1(side.b.x + 15)}`);
+  const ray = wr.raycast(0, 30, -100, 0, 0, -1, 768);
+  check('white room: beam hits the ramp slope where it should', ray && ray.kind === 'ramp' && Math.abs(ray.t - (140 + (30 / 116) * 240)) < 1, `t=${ray && f1(ray.t)} (${ray && ray.kind}), want ${f1(140 + (30 / 116) * 240)}`);
+  // Plain jump can't reach the 96 platform; crouch-jump can.
+  const tryClimb = (crouch) =>
+    walk(200, 0, -440, { wishZ: -1 }, 160, (i, b) => ({ jump: i === 0, crouch: crouch && !b.onGround && b.vy < 60 }));
+  const plain = tryClimb(false).b;
+  const cj = tryClimb(true).b;
+  check('white room: plain jump falls short of the platform', plain.y < 100, `y=${f1(plain.y)}`);
+  check('white room: crouch-jump makes the platform', Math.abs(cj.y - 116) < 0.01, `y=${f1(cj.y)}`);
+  let clear = 0;
+  for (const sp of wr.spawns) if (wr.hullFree(sp.x, sp.y + 0.5, sp.z, HULL.halfWidth, HULL.height)) clear++;
+  check('white room: spawns clear', clear === wr.spawns.length, `${clear}/${wr.spawns.length}`);
+  const wnav = new NavGrid(wr);
+  let ok = 0;
+  let total = 0;
+  for (const a of wr.spawns) {
+    for (const c of wr.spawns) {
+      if (a === c) continue;
+      total++;
+      const p = wnav.findPath(a.x, a.z, c.x, c.z, a.y, c.y);
+      if (p && p.length) ok++;
+    }
+  }
+  check('white room: nav connects all spawns (via ramps)', ok === total, `${ok}/${total}`);
+}
+
+// --- Lifesteal ---
+{
+  const { Sim } = await import('../src/game/Sim.js');
+  const nav = new NavGrid(flat, { half: 1400, cell: 40 });
+  const sim = new Sim({ world: flat, nav, length: 0, lifesteal: 1, seed: 1 });
+  const P = sim.player;
+  const B = sim.bot;
+  P.health = 50;
+  P.shield = 0;
+  sim.damage(B, 6, P);
+  const ok1 = P.health === 56 && P.shield === 0;
+  P.health = 98;
+  sim.damage(B, 6, P);
+  const ok2 = P.health === 100 && P.shield === 4;
+  const half = new Sim({ world: flat, nav, length: 0, lifesteal: 0.5, seed: 1 });
+  half.player.health = 50;
+  half.damage(half.bot, 6, half.player);
+  const off = new Sim({ world: flat, nav, length: 0, lifesteal: 0, seed: 1 });
+  off.player.health = 50;
+  off.damage(off.bot, 6, off.player);
+  check('lifesteal: full heals health then shields', ok1 && ok2, `56/0 → ${ok1}, overflow to shield → ${ok2}`);
+  check('lifesteal: half and off', half.player.health === 53 && off.player.health === 50, `half ${half.player.health}, off ${off.player.health}`);
 }
 
 // LG numbers

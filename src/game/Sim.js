@@ -31,6 +31,7 @@ export function makeStats() {
     trackStart: -1,
     lastHitT: -9,
     shieldBreaks: 0,
+    healed: 0,
   };
 }
 
@@ -61,12 +62,13 @@ export class Fighter {
 }
 
 export class Sim {
-  constructor({ world, nav, difficulty = 'hard', gravity = 'halo', length = 180, spectate = null, seed = null }) {
+  constructor({ world, nav, difficulty = 'hard', gravity = 'halo', length = 180, lifesteal = 1, spectate = null, seed = null }) {
     this.world = world;
     this.nav = nav;
     this.difficulty = difficulty;
     this.phys = GRAVITY_PRESETS[gravity] || GRAVITY_PRESETS.halo;
     this.length = length;
+    this.lifesteal = lifesteal;
     this.rng = seed == null ? Math.random : mulberry32(seed);
     this.time = 0;
     this.clock = 0;
@@ -275,6 +277,14 @@ export class Sim {
     else m.behind++;
   }
 
+  heal(f, amount) {
+    const h = Math.min(amount, VITALS.health - f.health);
+    f.health += h;
+    const sh = Math.min(amount - h, VITALS.shield - f.shield);
+    f.shield += sh;
+    f.stats.healed += h + sh;
+  }
+
   damage(t, dmg, attacker) {
     let rem = dmg;
     let shieldHit = false;
@@ -294,6 +304,7 @@ export class Sim {
     t.recharging = false;
     attacker.stats.dmg += dmg;
     t.stats.taken += dmg;
+    if (this.lifesteal > 0) this.heal(attacker, dmg * this.lifesteal);
     const k = LG.knockback;
     t.body.vx += D.x * k;
     t.body.vz += D.z * k;

@@ -1,7 +1,7 @@
 # Arcwarm: plan
 
 A 2–5 minute aim warm-up you play as a game: a **Quake Live lightning gun duel against a bot**, with
-**Halo gravity, air control and shields**, on one custom forest map (**Pinehollow**). The duel *is* the warm-up.
+**Halo gravity, air control and shields**, on a custom forest map (**Pinehollow**) or a plain **White Room**. The duel *is* the warm-up.
 You track while you move and dodge, and the bot's beam punishes predictable movement.
 
 Stack: Three.js 0.186.1 + Vite, plain JavaScript. `Play.bat` / `npm run dev` → http://localhost:5200.
@@ -10,7 +10,8 @@ Live: https://ycgnem.github.io/arcwarm/ (GitHub Pages, redeploys on every push t
 ## Decisions (from you)
 - Mode: duel only (the bot fights back). No separate scenario mode.
 - Feel: Halo gravity + Halo movement (air control without bhop speed gain). The LG and hitbox use QL numbers.
-- Map: one custom forest map.
+- Maps: one custom forest map, plus a basic white room with ramps.
+- Lifesteal (default Full): hits heal the shooter, so a fight is decided by who misses more.
 - Bot look: QL-style brightskin (colour selectable).
 
 ## Mechanics, as built (all numbers live in `src/data/`)
@@ -24,6 +25,8 @@ Live: https://ycgnem.github.io/arcwarm/ (GitHub Pages, redeploys on every push t
 | Hull / hitbox | 30×30×56 (QL) | Trees collide as circles so you glance off trunks |
 | LG | 50 ms, 6 dmg, 768u, small knockback | 120 dps. Kill = 34 hits (1.65 s at 100%, ~4 s at 40%) |
 | Vitals | 100 shield + 100 health | Shields recharge after 4 s untouched (70/s), then health regens |
+| Lifesteal | Off / Half / Full (default Full) | Each hit heals the shooter by that share of the damage: health first, then shields |
+| Ramps | Axis-aligned wedges | You ride the slope (rests on the highest touching edge, like a Quake box hull). The sides are walls; the beam hits the slope |
 | Hit reg | Your beam tests the bot *where you saw it* (interpolated) | Verified: perfect tracking = 100%, one hitbox-width off = 0% |
 | Launchers | Grav lift → treehouse, pad → shrine, man cannon south → north | Velocity solved at launch, so they land on target under any gravity |
 
@@ -45,11 +48,24 @@ Calibrated accuracy (`npm run botsim`, 60 s per pattern at ~420u):
 
 Jumping in its sight is punished (it predicts arcs). That's on purpose: it teaches Halo-gravity movement.
 
+Lifesteal changes match flow (bot vs bot, 3:00): equal levels trade only 3–5 frags (long fights won on misses),
+an accuracy gap is decisive (Hard vs Nightmare 0–13 with Full lifesteal, 17–23 without), and time spent tracking
+rises from ~55% to ~75%.
+
 ## Pinehollow
 A forest bowl (~2000u across, 1000u radius). A mossy central hollow with a fallen log, a rock-plateau treehouse to
 the west (stairs + grav lift), a stone shrine on the east knoll (stairs + pad, broken pillars to perch on), ruin walls
 to the south with the man cannon, a north ridge with boulders. ~44 trunks inside the ring as cover, and a dense
 outer forest. Dirt lanes link the landmarks.
+
+## White Room
+A 1800×1800 grid-textured room with 440-tall walls. North/south platforms (116 high) and east/west wall ledges (72)
+each have an orange ramp. Platforms are out of reach for a plain jump (91 + 18 ledge step = 109) but a crouch-jump makes
+it (107 + 18 = 125). There are four tall pillars for cover and a low block in the middle. Bots use the ramps.
+
+Adding a map: write a pure layout in `src/world/<name>Layout.js` (terrain, boxes, ramps, cylinders, pads, spawns),
+register it in `src/world/maps.js`, add a visuals class with the `ForestVisuals` interface (`tex.glow`, `sun`, `update`)
+to `VISUALS` in `game/Game.js`, then add checks to `tools/mechcheck.mjs`.
 
 ## Results screen
 LG accuracy (and your best at that level), damage/min, longest unbroken track, airborne vs grounded accuracy, shield
@@ -58,9 +74,12 @@ with a coaching tip. History is kept per browser.
 
 ## Tools
 - `npm run check`: mechanics checks (jump/hang per preset, accel, air control, crouch-jump, stairs, launchers ×
-  gravity presets, trunk slide, walls, boundary, nav connectivity, hit registration).
-- `npm run botsim`: bot accuracy vs scripted dodgers + full bot-vs-bot matches (stuck/idle detection).
-- Debug URLs: `?debug=spectate` (bot vs bot from its eyes), `?debug=start` (match without pointer lock), `&len=60`.
+  gravity presets, trunk slide, walls, boundary, nav connectivity, hit registration, ramps up/down/sides/beam,
+  crouch-jump-only platforms, lifesteal maths).
+- `npm run botsim`: bot accuracy vs scripted dodgers + full bot-vs-bot matches on both maps, with and without
+  lifesteal (stuck/idle detection).
+- Debug URLs: `?debug=spectate` (bot vs bot from its eyes), `?debug=start` (match without pointer lock), `&len=60`,
+  `&map=whiteroom`.
 
 ## Stages
 - [x] S0 Scaffold
@@ -70,10 +89,11 @@ with a coaching tip. History is kept per browser.
 - [x] S4 Match: shields/health, spawns, countdown, timer, death cam, results + coaching, history
 - [x] S5 Map + art: Pinehollow, procedural textures, shadows, ground cover, light shafts, brightskin model, viewmodel
 - [x] S6 Live: GitHub repo + Pages deploy
+- [x] S7 Lifesteal (menu option), ramps in the engine, White Room map, map select, heal glow, history per map
 
 ## Where things stand (handoff)
 - Everything above is built and committed. `npm run check` passes; `npm run botsim` matches the calibration table.
-- **Not yet verified by a human:** raw mouse feel / sens matching in a real pointer-locked session, Esc→pause→resume,
+- **Not yet verified by a human:** whether Full lifesteal feels good vs a bot (fights run long by design), raw mouse feel / sens matching in a real pointer-locked session, Esc→pause→resume,
   procedural sounds, and performance at high resolution/refresh. First job next session: playtest and collect feel notes.
 - Likely tuning knobs after playtest: `src/data/physics.js` (gravity, jump, airAccel, runSpeed), `src/data/weapons.js`
   (LG damage/knockback), `src/data/match.js` (shield delay/rate), `src/data/bots.js` (per-level reaction/lead/jitter).

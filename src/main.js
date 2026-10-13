@@ -1,5 +1,6 @@
 // Boot: renderer, settings, input, audio, UI, and the frame loop.
-// Debug URLs: ?debug=start (match without pointer lock), ?debug=spectate (watch bot vs bot from its eyes), &len=60.
+// Debug URLs: ?debug=start (match without pointer lock), ?debug=spectate (watch bot vs bot from its eyes), &len=60,
+// &map=whiteroom.
 import './ui/style.css';
 import * as THREE from 'three';
 import { loadSettings } from './core/Settings.js';
@@ -29,6 +30,7 @@ renderer.toneMappingExposure = 1.12;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const settings = loadSettings();
+if (params.has('map')) settings.map = params.get('map'); // debug: not saved
 const audio = new Audio();
 const input = new Input(canvas, settings);
 const hud = new Hud(settings);
@@ -46,6 +48,7 @@ const menus = new Menus(settings, {
     menus.showMain();
   },
   onSettingsChanged: () => game.applySettings(),
+  onMapChange: (id) => game.loadMap(id),
 });
 game = new Game({ renderer, settings, audio, input, hud, menus, debug });
 window.arcwarm = game; // console poking

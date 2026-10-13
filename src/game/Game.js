@@ -6,10 +6,13 @@ import { LG } from '../data/weapons.js';
 import { MATCH } from '../data/match.js';
 import { DEG, clamp, viewDir, qlFovToVertical, yawTo } from '../core/math.js';
 import { yawPerCount, pitchPerCount } from '../core/Settings.js';
-import { buildForestLayout } from '../world/forestLayout.js';
+import { MAPS } from '../world/maps.js';
 import { World, rayBox } from '../world/World.js';
 import { NavGrid } from '../world/NavGrid.js';
 import { ForestVisuals } from '../world/ForestVisuals.js';
+import { WhiteRoomVisuals } from '../world/WhiteRoomVisuals.js';
+
+const VISUALS = { forest: ForestVisuals, whiteroom: WhiteRoomVisuals };
 import { Sim } from './Sim.js';
 import { eyeHeight } from './Movement.js';
 import { Beam } from '../fx/Beam.js';
@@ -36,20 +39,11 @@ export class Game {
     this.menus = menus;
     this.debug = debug;
 
-    this.layout = buildForestLayout();
-    this.world = new World(this.layout);
-    this.nav = new NavGrid(this.world);
-
-    this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(80, innerWidth / innerHeight, 1, 9000);
     this.camera.rotation.order = 'YXZ';
-    this.visuals = new ForestVisuals(this.scene, this.layout, { shadows: settings.shadows });
-    this.botModel = new BotModel(this.scene, settings.enemyColor);
-    this.playerBeam = new Beam(this.scene, { color: 0x8fd0ff, glowTex: this.visuals.tex.glow });
-    this.botBeam = new Beam(this.scene, { color: 0x9dffb0, glowTex: this.visuals.tex.glow });
-    this.fx = new Effects(this.scene, this.visuals.tex.glow);
-    this.fx.setGibColor(settings.enemyColor);
     this.viewmodel = new Viewmodel();
+    this.maps = {};
+    this.loadMap(MAPS[settings.map] ? settings.map : 'forest');
 
     this.sim = null;
     this.state = 'menu';
@@ -70,6 +64,30 @@ export class Game {
     this.applySettings();
     addEventListener('resize', () => this.resize());
     this.resize();
+  }
+
+  // Each map gets its own scene, collision world, nav grid and actors, built once and cached.
+  loadMap(id) {
+    if (!this.maps[id]) {
+      const layout = MAPS[id].build();
+      const world = new World(layout);
+      const scene = new THREE.Scene();
+      const visuals = new VISUALS[id](scene, layout, { shadows: this.s.shadows });
+      this.maps[id] = {
+        layout,
+        world,
+        nav: new NavGrid(world),
+        scene,
+        visuals,
+        botModel: new BotModel(scene, this.s.enemyColor),
+        playerBeam: new Beam(scene, { color: 0x8fd0ff, glowTex: visuals.tex.glow }),
+        botBeam: new Beam(scene, { color: 0x9dffb0, glowTex: visuals.tex.glow }),
+        fx: new Effects(scene, visuals.tex.glow),
+      };
+    }
+    Object.assign(this, this.maps[id]);
+    this.mapId = id;
+    if (this.camera) this.applySettings();
   }
 
   applySettings() {
@@ -102,7 +120,9 @@ export class Game {
 
   startMatch() {
     const s = this.s;
+    if (s.map !== this.mapId && MAPS[s.map]) this.loadMap(s.map);
     this.sim = new Sim({
+      lifesteal: s.lifesteal,
       world: this.world,
       nav: this.nav,
       difficulty: s.difficulty,
@@ -140,6 +160,8 @@ export class Game {
     const B = sim.bot.stats;
     const r = {
       date: Date.now(),
+      map: this.mapId,
+      lifesteal: sim.lifesteal,
       difficulty: sim.difficulty,
       gravity: this.s.gravity,
       seconds: sim.clock,
@@ -156,6 +178,7 @@ export class Game {
         track: P.trackLongest,
         miss: { ...P.miss },
         breaks: P.shieldBreaks,
+        healed: Math.round(P.healed),
       },
       bot: { acc: B.shots ? Math.round((100 * B.hits) / B.shots) : 0, frags: B.frags },
     };
@@ -417,7 +440,7 @@ export class Game {
     this.menuOrbit += dt * 0.04;
     const cam = this.camera;
     const a = this.menuOrbit;
-    cam.position.set(Math.cos(a) * 300, 95, Math.sin(a) * 300);
+    cam.position.set(Math.cos(a) * 300, this.mapId === 'whiteroom' ? 180 : 95, Math.sin(a) * 300);
     cam.lookAt(-Math.cos(a) * 500, 30, -Math.sin(a) * 500);
     this.botModel.update(dt, { alive: false });
     this.playerBeam.setVisible(false);

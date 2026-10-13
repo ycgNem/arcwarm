@@ -104,6 +104,22 @@ function moveAxis(b, axisX, d, world, grounded) {
     }
   }
 
+  // Ramps: ride up the slope (any rise a step could take, even mid-jump); the steep sides are walls.
+  const rt = world.rampAbove(b.x, b.y, b.z, hw, b.height);
+  if (rt > -Infinity) {
+    if (rt - b.y <= MOVE.stepHeight + 0.001 && world.hullFree(b.x, rt, b.z, hw, b.height)) b.y = rt;
+    else {
+      if (axisX) {
+        b.x -= d;
+        b.vx = 0;
+      } else {
+        b.z -= d;
+        b.vz = 0;
+      }
+      return;
+    }
+  }
+
   for (const box of world.boxes) {
     if (!hullBox(b.x, b.y, b.z, hw, b.height, box)) continue;
     const rise = box.y1 - b.y;
@@ -169,6 +185,9 @@ function resolveVertical(b, prevY, world, events) {
       if (!hullBox(b.x, b.y, b.z, hw, b.height, box)) continue;
       if (prevY >= box.y1 - 0.5 || box.y1 - b.y <= MOVE.stepHeight) b.y = box.y1;
     }
+    // Landing on a slope: fast falls can sink more than a tick's worth into it.
+    const rt = world.rampAbove(b.x, b.y, b.z, hw, b.height);
+    if (rt > -Infinity && rt <= prevY + 0.5) b.y = rt;
   } else if (b.y > prevY) {
     for (const box of world.boxes) {
       if (!hullBox(b.x, b.y, b.z, hw, b.height, box)) continue;

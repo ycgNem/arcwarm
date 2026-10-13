@@ -84,11 +84,59 @@ export function hullCylinder(x, y, z, hw, h, c) {
   return dx * dx + dz * dz < r * r - 0.01;
 }
 
+// Ramps: axis-aligned wedges solid down to y0. dir ('+x' | '-x' | '+z' | '-z') is the way the surface climbs,
+// from lowY at one end of the footprint to highY at the other.
+export function prepareRamp(r) {
+  const along = r.dir[1] === 'x';
+  const len = along ? r.x1 - r.x0 : r.z1 - r.z0;
+  const s = (r.highY - r.lowY) / len;
+  const P = (nx, ny, nz, d) => ({ nx, ny, nz, d });
+  r.planes = [P(-1, 0, 0, -r.x0), P(1, 0, 0, r.x1), P(0, 0, -1, -r.z0), P(0, 0, 1, r.z1), P(0, -1, 0, -r.y0)];
+  if (r.dir === '+x') r.planes.push(P(-s, 1, 0, r.lowY - s * r.x0));
+  else if (r.dir === '-x') r.planes.push(P(s, 1, 0, r.lowY + s * r.x1));
+  else if (r.dir === '+z') r.planes.push(P(0, 1, -s, r.lowY - s * r.z0));
+  else r.planes.push(P(0, 1, s, r.lowY + s * r.z1));
+  return r;
+}
+
+// Highest point of the ramp surface under a footprint (-Infinity if it doesn't overlap). Like boxes, a hull rests on
+// whichever edge touches highest, which is what a Quake box hull does on a slope.
+export function rampTop(r, fx0, fz0, fx1, fz1) {
+  if (fx1 <= r.x0 || fx0 >= r.x1 || fz1 <= r.z0 || fz0 >= r.z1) return -Infinity;
+  let t;
+  if (r.dir === '+x') t = (Math.min(fx1, r.x1) - r.x0) / (r.x1 - r.x0);
+  else if (r.dir === '-x') t = (r.x1 - Math.max(fx0, r.x0)) / (r.x1 - r.x0);
+  else if (r.dir === '+z') t = (Math.min(fz1, r.z1) - r.z0) / (r.z1 - r.z0);
+  else t = (r.z1 - Math.max(fz0, r.z0)) / (r.z1 - r.z0);
+  return r.lowY + (r.highY - r.lowY) * Math.max(0, Math.min(1, t));
+}
+
+// Ray vs convex solid given as half-spaces n·p ≤ d.
+export function rayConvex(ox, oy, oz, dx, dy, dz, planes, maxT) {
+  let t0 = 0;
+  let t1 = maxT;
+  for (const p of planes) {
+    const denom = p.nx * dx + p.ny * dy + p.nz * dz;
+    const dist = p.nx * ox + p.ny * oy + p.nz * oz - p.d;
+    if (Math.abs(denom) < 1e-9) {
+      if (dist > 0) return null;
+      continue;
+    }
+    const t = -dist / denom;
+    if (denom < 0) {
+      if (t > t0) t0 = t;
+    } else if (t < t1) t1 = t;
+    if (t0 > t1) return null;
+  }
+  return t0;
+}
+
 export class World {
   constructor(layout) {
     this.terrain = layout.terrain;
     this.boxes = layout.boxes;
     this.cylinders = layout.cylinders;
+    this.ramps = (layout.ramps || []).map(prepareRamp);
     this.boundaryR = layout.boundaryR;
     this.pads = layout.pads;
     this.spawns = layout.spawns;
@@ -113,6 +161,14 @@ export class World {
         best = t;
         kind = 'tree';
         obj = c;
+      }
+    }
+    for (const r of this.ramps) {
+      const t = rayConvex(ox, oy, oz, dx, dy, dz, r.planes, best);
+      if (t !== null && t < best) {
+        best = t;
+        kind = 'ramp';
+        obj = r;
       }
     }
     const tt = this.terrain.raycast(ox, oy, oz, dx, dy, dz, best);
@@ -140,6 +196,10 @@ export class World {
       if (b.y1 > maxY || b.y1 <= g) continue;
       if (x + hw > b.x0 && x - hw < b.x1 && z + hw > b.z0 && z - hw < b.z1) g = b.y1;
     }
+    for (const r of this.ramps) {
+      const t = rampTop(r, x - hw, z - hw, x + hw, z + hw);
+      if (t > g && t <= maxY) g = t;
+    }
     return g;
   }
 
@@ -150,12 +210,25 @@ export class World {
       if (b.y1 <= g) continue;
       if (x + hw > b.x0 && x - hw < b.x1 && z + hw > b.z0 && z - hw < b.z1) g = b.y1;
     }
+    for (const r of this.ramps) g = Math.max(g, rampTop(r, x - hw, z - hw, x + hw, z + hw));
     return g;
+  }
+
+  // Ramp surface the hull at feet height y is sunk into (highest), or -Infinity.
+  rampAbove(x, y, z, hw, h) {
+    let top = -Infinity;
+    for (const r of this.ramps) {
+      if (y + h <= r.y0) continue;
+      const t = rampTop(r, x - hw, z - hw, x + hw, z + hw);
+      if (t > y + EPS && t > top) top = t;
+    }
+    return top;
   }
 
   hullFree(x, y, z, hw, h) {
     for (const b of this.boxes) if (hullBox(x, y, z, hw, h, b)) return false;
     for (const c of this.cylinders) if (hullCylinder(x, y, z, hw, h, c)) return false;
+    if (this.rampAbove(x, y, z, hw, h) > -Infinity) return false;
     return true;
   }
 }

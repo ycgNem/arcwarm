@@ -6,7 +6,7 @@ import { TICK } from '../src/data/physics.js';
 import { BOT_ORDER } from '../src/data/bots.js';
 import { World } from '../src/world/World.js';
 import { Heightfield } from '../src/world/Heightfield.js';
-import { buildForestLayout } from '../src/world/forestLayout.js';
+import { MAPS } from '../src/world/maps.js';
 import { NavGrid } from '../src/world/NavGrid.js';
 import { Sim } from '../src/game/Sim.js';
 import { mulberry32 } from '../src/core/rng.js';
@@ -97,13 +97,16 @@ for (const level of BOT_ORDER) {
   console.log(`${level.padEnd(11)} ${row.join('')}${air}`);
 }
 
-// ---------- 2. Full matches on the real map ----------
-const layout = buildForestLayout();
-const world = new World(layout);
-const nav = new NavGrid(world);
+// ---------- 2. Full matches on each map ----------
+const worlds = {};
+for (const id of Object.keys(MAPS)) {
+  const w = new World(MAPS[id].build());
+  worlds[id] = { world: w, nav: new NavGrid(w) };
+}
 
-function match(levelA, levelB, seed) {
-  const sim = new Sim({ world, nav, difficulty: levelB, spectate: levelA, length: 180, seed });
+function match(mapId, levelA, levelB, seed, lifesteal) {
+  const { world, nav } = worlds[mapId];
+  const sim = new Sim({ world, nav, difficulty: levelB, spectate: levelA, length: 180, seed, lifesteal });
   const brainA = sim.brains.get(sim.player);
   const brainB = sim.brains.get(sim.bot);
   const modes = { engage: 0, hunt: 0, retreat: 0 };
@@ -126,22 +129,28 @@ function match(levelA, levelB, seed) {
   return { sim, modes, pads, ms, maxStill, stuck: brainA.stuckCount + brainB.stuckCount };
 }
 
-console.log('\n== Bot vs bot, 3:00 on Pinehollow ==');
-console.log('matchup               score    acc A   acc B   air-acc B  dmg/min B  engaged  retreat  pads  stuck  longest idle  sim ms');
 const pairs = [
-  ['easy', 'easy'],
   ['normal', 'normal'],
   ['hard', 'hard'],
-  ['pro', 'pro'],
   ['nightmare', 'nightmare'],
   ['hard', 'nightmare'],
 ];
-for (const [a, b] of pairs) {
-  const r = match(a, b, 3);
-  const A = r.sim.player.stats;
-  const B = r.sim.bot.stats;
-  const live = r.sim.clock;
-  console.log(
-    `${(a + ' v ' + b).padEnd(21)} ${(A.frags + '-' + B.frags).padEnd(8)} ${pct(A.hits, A.shots).padEnd(7)} ${pct(B.hits, B.shots).padEnd(7)} ${pct(B.airHits, B.airShots).padEnd(10)} ${((B.dmg / live) * 60).toFixed(0).padEnd(10)} ${pct(r.modes.engage, live).padEnd(8)} ${pct(r.modes.retreat, live).padEnd(8)} ${String(r.pads).padEnd(5)} ${String(r.stuck).padEnd(6)} ${r.maxStill.toFixed(1).padEnd(13)} ${r.ms.toFixed(0)}`,
-  );
+const runs = [
+  ['forest', 1],
+  ['whiteroom', 1],
+  ['forest', 0],
+];
+for (const [mapId, ls] of runs) {
+  console.log(`
+== Bot vs bot, 3:00 on ${MAPS[mapId].label}, lifesteal ${ls ? Math.round(ls * 100) + '%' : 'off'} ==`);
+  console.log('matchup               score    acc A   acc B   air-acc B  dmg/min B  healed B  engaged  retreat  pads  stuck  longest idle  sim ms');
+  for (const [a, b] of pairs) {
+    const r = match(mapId, a, b, 3, ls);
+    const A = r.sim.player.stats;
+    const B = r.sim.bot.stats;
+    const live = r.sim.clock;
+    console.log(
+      `${(a + ' v ' + b).padEnd(21)} ${(A.frags + '-' + B.frags).padEnd(8)} ${pct(A.hits, A.shots).padEnd(7)} ${pct(B.hits, B.shots).padEnd(7)} ${pct(B.airHits, B.airShots).padEnd(10)} ${((B.dmg / live) * 60).toFixed(0).padEnd(10)} ${String(Math.round(B.healed)).padEnd(9)} ${pct(r.modes.engage, live).padEnd(8)} ${pct(r.modes.retreat, live).padEnd(8)} ${String(r.pads).padEnd(5)} ${String(r.stuck).padEnd(6)} ${r.maxStill.toFixed(1).padEnd(13)} ${r.ms.toFixed(0)}`,
+    );
+  }
 }

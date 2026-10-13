@@ -122,7 +122,7 @@ export class Hud {
 
   damageFrom(relAngle) {
     this.arcs.push({ a: relAngle, life: 1 });
-    this.redFlash = Math.min(1, this.redFlash + 0.25);
+    this.redFlash = Math.min(0.3, this.redFlash + 0.06); // capped: under sustained LG fire it must not hide the target
   }
 
   message(big, small = '', dur = 1.5) {
@@ -156,6 +156,12 @@ export class Hud {
     this.shieldBar.querySelector('.num').textContent = Math.ceil(P.shield);
     this.healthBar.querySelector('.num').textContent = Math.ceil(P.health);
     this.shieldBar.classList.toggle('broken', P.alive && P.shield <= 0);
+    // Lifesteal feedback: bars glow green while your hits are healing you.
+    const total = P.health + P.shield;
+    if (P.alive && !P.recharging && total > (this.lastTotal ?? total) + 0.01) this.healT = 0.15;
+    this.lastTotal = total;
+    this.healT = (this.healT || 0) - dt;
+    this.vitals.classList.toggle('healing', this.healT > 0);
     this.healthBar.classList.toggle('low', P.health < 35);
 
     const st = P.stats;
@@ -192,7 +198,7 @@ export class Hud {
       g.stroke();
     }
     this.redFlash = Math.max(0, this.redFlash - dt * 2.2);
-    this.vignette.style.opacity = Math.min(0.9, this.redFlash + (P.alive && P.shield <= 0 ? 0.25 + 0.1 * Math.sin(performance.now() / 90) : 0));
+    this.vignette.style.opacity = Math.min(0.45, this.redFlash + (P.alive && P.shield <= 0 ? 0.25 + 0.1 * Math.sin(performance.now() / 90) : 0));
 
     this.board.classList.toggle('on', showBoard);
     if (showBoard) {
