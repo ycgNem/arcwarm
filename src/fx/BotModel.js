@@ -18,7 +18,6 @@ export class BotModel {
     const box = (w, h, d, mat, parent, x = 0, y = 0, z = 0) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
       m.position.set(x, y, z);
-      m.castShadow = true;
       parent.add(m);
       return m;
     };
@@ -84,6 +83,21 @@ export class BotModel {
     scene.add(this.hitbox);
     this.hitbox.visible = false;
 
+    // Blob shadow under the bot: shrinks and fades with height, so you can read its jump arcs.
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grd.addColorStop(0, 'rgba(0,0,0,0.55)');
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 64, 64);
+    this.blob = new THREE.Mesh(
+      new THREE.PlaneGeometry(44, 44).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
+    );
+    scene.add(this.blob);
+
     this.phase = 0;
     this.crouch = 0;
     this.flash = 0;
@@ -105,7 +119,12 @@ export class BotModel {
   update(dt, s, showHitbox) {
     this.root.visible = s.alive;
     this.hitbox.visible = showHitbox && s.alive;
+    this.blob.visible = s.alive;
     if (!s.alive) return;
+    const above = Math.max(0, s.y - s.ground);
+    this.blob.position.set(s.x, s.ground + 0.6, s.z);
+    this.blob.scale.setScalar(Math.max(0.4, 1 - above / 260));
+    this.blob.material.opacity = Math.max(0.25, 1 - above / 200);
     this.root.position.set(s.x, s.y, s.z);
     this.root.rotation.y = s.yaw;
     this.crouch += ((s.crouched ? 1 : 0) - this.crouch) * Math.min(1, dt * 18);

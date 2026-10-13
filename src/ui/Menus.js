@@ -31,7 +31,7 @@ const el = (html) => {
 };
 const pct = (h, s) => (s ? Math.round((100 * h) / s) : 0);
 const ENEMY_COLORS = ['#7dff3a', '#ff3b3b', '#3bf0ff', '#ffe93b', '#ff3bf0', '#ffffff'];
-const ACTION_LABELS = { forward: 'Forward', back: 'Back', left: 'Strafe left', right: 'Strafe right', jump: 'Jump', crouch: 'Crouch', fire: 'Fire', scores: 'Scores' };
+const ACTION_LABELS = { forward: 'Forward', back: 'Back', left: 'Strafe left', right: 'Strafe right', jump: 'Jump', crouch: 'Crouch', fire: 'Fire', scores: 'Scores', sensTest: 'Sens test' };
 const keyName = (c) =>
   ({ Mouse0: 'Mouse1', Mouse1: 'Mouse3', Mouse2: 'Mouse2', Mouse3: 'Mouse4', Mouse4: 'Mouse5', Space: 'Space', ShiftLeft: 'LShift', ControlLeft: 'LCtrl' })[c] ||
   c.replace(/^Key/, '').replace(/^Digit/, '');

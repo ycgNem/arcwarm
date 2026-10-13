@@ -24,7 +24,9 @@ document.body.prepend(canvas);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.autoClear = false;
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+// The world never moves, so the sun's shadow map is rendered once per map load (Game sets needsUpdate), not per frame.
+renderer.shadowMap.autoUpdate = false;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.12;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -78,7 +80,11 @@ input.onLockChange = (locked) => {
     menus.showPause();
   }
 };
-input.onKey = (code) => {
+input.onKey = (code, e) => {
+  if ((settings.keys.sensTest || []).includes(code)) {
+    e.preventDefault();
+    game.toggleSensTest();
+  }
   if (game.state === 'results' && menus.current === 'results' && (code === 'KeyR' || code === 'Enter')) play();
 };
 

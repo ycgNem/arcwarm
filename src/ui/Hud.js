@@ -56,6 +56,8 @@ export class Hud {
     root.append(this.feedEl);
     this.board = el('div', 'scoreboard');
     root.append(this.board);
+    this.sens = el('div', 'senstest');
+    root.append(this.sens);
     document.body.append(root);
 
     this.hitT = 0;
@@ -68,8 +70,10 @@ export class Hud {
   }
 
   resize() {
-    this.dmg.width = innerWidth;
-    this.dmg.height = innerHeight;
+    // Square canvas just big enough for the arcs, instead of a full-screen layer.
+    const size = Math.ceil(Math.min(innerWidth, innerHeight) * 0.4);
+    this.dmg.width = this.dmg.height = size;
+    this.arcsDrawn = true;
   }
 
   show(on) {
@@ -79,9 +83,8 @@ export class Hud {
   // ---------- crosshair ----------
   drawCrosshair(color) {
     const s = this.settings.crosshair;
-    const key = color + JSON.stringify(s);
-    if (key === this.lastCross) return;
-    this.lastCross = key;
+    if (color === this.lastCross) return; // Game resets lastCross when settings change
+    this.lastCross = color;
     const g = this.cross.getContext('2d');
     const c = 64;
     g.clearRect(0, 0, 128, 128);
@@ -116,6 +119,11 @@ export class Hud {
     pass(false);
   }
 
+  sensTest(html) {
+    this.set('sensOn', this.sens, 'on', !!html);
+    if (html) this.set('sensHtml', this.sens, 'html', html);
+  }
+
   hit() {
     this.hitT = 0.07;
   }
@@ -139,72 +147,102 @@ export class Hud {
     while (this.feedEl.children.length > 4) this.feedEl.firstChild.remove();
   }
 
+  // Only touch the DOM when a value changes (writing text/styles every frame forces style + layout work).
+  set(key, el, prop, value) {
+    const c = this.cache || (this.cache = {});
+    if (c[key] === value) return;
+    c[key] = value;
+    if (prop === 'text') el.textContent = value;
+    else if (prop === 'html') el.innerHTML = value;
+    else if (prop === 'transform') el.style.transform = value;
+    else if (prop === 'opacity') el.style.opacity = value;
+    else if (prop === 'display') el.style.display = value;
+    else el.classList.toggle(prop, value);
+  }
+
   update(dt, sim, fps, showBoard) {
     const P = sim.player;
     const B = sim.bot;
-    const q = (k) => this.score.querySelector(`[data-k="${k}"]`);
-    q('you').textContent = P.stats.frags;
-    q('bot').textContent = B.stats.frags;
-    q('botname').textContent = B.name.toUpperCase();
+    if (!this.els) {
+      const q = (k) => this.score.querySelector(`[data-k="${k}"]`);
+      this.els = {
+        you: q('you'),
+        bot: q('bot'),
+        botname: q('botname'),
+        clock: q('clock'),
+        sFill: this.shieldBar.querySelector('.fill'),
+        hFill: this.healthBar.querySelector('.fill'),
+        sNum: this.shieldBar.querySelector('.num'),
+        hNum: this.healthBar.querySelector('.num'),
+      };
+    }
+    const E = this.els;
+    this.set('you', E.you, 'text', String(P.stats.frags));
+    this.set('bot', E.bot, 'text', String(B.stats.frags));
+    this.set('botname', E.botname, 'text', B.name.toUpperCase());
     const left = sim.length > 0 ? Math.max(0, sim.length - sim.clock) : sim.clock;
-    q('clock').textContent = sim.state === 'countdown' ? 'WARM' : fmtClock(left);
+    this.set('clock', E.clock, 'text', sim.state === 'countdown' ? 'WARM' : fmtClock(left));
 
-    const sf = P.shield / VITALS.shield;
-    const hf = P.health / VITALS.health;
-    this.shieldBar.querySelector('.fill').style.transform = `scaleX(${sf})`;
-    this.healthBar.querySelector('.fill').style.transform = `scaleX(${hf})`;
-    this.shieldBar.querySelector('.num').textContent = Math.ceil(P.shield);
-    this.healthBar.querySelector('.num').textContent = Math.ceil(P.health);
-    this.shieldBar.classList.toggle('broken', P.alive && P.shield <= 0);
+    const sh = Math.ceil(P.shield);
+    const hp = Math.ceil(P.health);
+    this.set('sFill', E.sFill, 'transform', `scaleX(${sh / VITALS.shield})`);
+    this.set('hFill', E.hFill, 'transform', `scaleX(${hp / VITALS.health})`);
+    this.set('sNum', E.sNum, 'text', String(sh));
+    this.set('hNum', E.hNum, 'text', String(hp));
+    this.set('broken', this.shieldBar, 'broken', P.alive && P.shield <= 0);
+    this.set('low', this.healthBar, 'low', P.health < 35);
     // Lifesteal feedback: bars glow green while your hits are healing you.
     const total = P.health + P.shield;
     if (P.alive && !P.recharging && total > (this.lastTotal ?? total) + 0.01) this.healT = 0.15;
     this.lastTotal = total;
     this.healT = (this.healT || 0) - dt;
-    this.vitals.classList.toggle('healing', this.healT > 0);
-    this.healthBar.classList.toggle('low', P.health < 35);
+    this.set('healing', this.vitals, 'healing', this.healT > 0);
 
     const st = P.stats;
-    this.br.innerHTML = `LG <b>${pct(st.hits, st.shots)}%</b><br>${st.dmg} dmg · ${st.shieldBreaks} breaks`;
-    this.fps.textContent = this.settings.showFps ? `${fps} fps` : '';
+    this.set('br', this.br, 'html', `LG <b>${pct(st.hits, st.shots)}%</b><br>${st.dmg} dmg · ${st.shieldBreaks} breaks`);
+    this.set('fps', this.fps, 'text', this.settings.showFps ? `${fps} fps` : '');
 
     this.hitT -= dt;
     this.drawCrosshair(this.hitT > 0 ? this.settings.hitColor : this.settings.crosshair.color);
-    this.cross.style.display = P.alive ? '' : 'none';
+    this.set('crossDisp', this.cross, 'display', P.alive ? '' : 'none');
 
     if (this.msgT > 0) {
       this.msgT -= dt;
       if (this.msgT <= 0) this.msg.classList.remove('on');
     }
 
-    // Damage arcs around the crosshair, pointing at the shooter.
-    const g = this.dmg.getContext('2d');
-    g.clearRect(0, 0, this.dmg.width, this.dmg.height);
-    const cx = this.dmg.width / 2;
-    const cy = this.dmg.height / 2;
-    const R = Math.min(cx, cy) * 0.32;
-    for (let i = this.arcs.length - 1; i >= 0; i--) {
-      const a = this.arcs[i];
-      a.life -= dt * 1.4;
-      if (a.life <= 0) {
-        this.arcs.splice(i, 1);
-        continue;
+    // Damage arcs around the crosshair, pointing at the shooter. Only redrawn while there is something to show.
+    if (this.arcs.length || this.arcsDrawn) {
+      const g = this.dmg.getContext('2d');
+      const W = this.dmg.width;
+      g.clearRect(0, 0, W, W);
+      const c = W / 2;
+      const R = Math.min(innerWidth, innerHeight) * 0.16;
+      for (let i = this.arcs.length - 1; i >= 0; i--) {
+        const a = this.arcs[i];
+        a.life -= dt * 1.4;
+        if (a.life <= 0) {
+          this.arcs.splice(i, 1);
+          continue;
+        }
+        const ang = -Math.PI / 2 - a.a;
+        g.strokeStyle = `rgba(255,70,70,${a.life * 0.8})`;
+        g.lineWidth = 7;
+        g.beginPath();
+        g.arc(c, c, R, ang - 0.32, ang + 0.32);
+        g.stroke();
       }
-      const ang = -Math.PI / 2 - a.a;
-      g.strokeStyle = `rgba(255,70,70,${a.life * 0.8})`;
-      g.lineWidth = 7;
-      g.beginPath();
-      g.arc(cx, cy, R, ang - 0.32, ang + 0.32);
-      g.stroke();
+      this.arcsDrawn = this.arcs.length > 0;
     }
     this.redFlash = Math.max(0, this.redFlash - dt * 2.2);
-    this.vignette.style.opacity = Math.min(0.45, this.redFlash + (P.alive && P.shield <= 0 ? 0.25 + 0.1 * Math.sin(performance.now() / 90) : 0));
+    const vig = Math.min(0.45, this.redFlash + (P.alive && P.shield <= 0 ? 0.25 + 0.1 * Math.sin(performance.now() / 90) : 0));
+    this.set('vig', this.vignette, 'opacity', String(Math.round(vig * 50) / 50));
 
-    this.board.classList.toggle('on', showBoard);
+    this.set('boardOn', this.board, 'on', showBoard);
     if (showBoard) {
       const row = (f) =>
         `<tr><td>${f.name}</td><td>${f.stats.frags}</td><td>${f.stats.deaths}</td><td>${pct(f.stats.hits, f.stats.shots)}%</td><td>${f.stats.dmg}</td><td>${f.stats.taken}</td></tr>`;
-      this.board.innerHTML = `<table><tr><th></th><th>K</th><th>D</th><th>LG</th><th>DMG</th><th>TAKEN</th></tr>${row(P)}${row(B)}</table>`;
+      this.set('board', this.board, 'html', `<table><tr><th></th><th>K</th><th>D</th><th>LG</th><th>DMG</th><th>TAKEN</th></tr>${row(P)}${row(B)}</table>`);
     }
   }
 }

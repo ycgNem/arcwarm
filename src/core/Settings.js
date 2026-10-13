@@ -12,6 +12,7 @@ export const DEFAULT_KEYS = {
   crouch: ['KeyC', 'ShiftLeft'], // not Ctrl: Ctrl+W closes the tab
   fire: ['Mouse0'],
   scores: ['Tab'],
+  sensTest: ['F2'],
 };
 
 export const DEFAULTS = {

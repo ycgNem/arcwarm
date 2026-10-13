@@ -18,7 +18,9 @@ export class Audio {
     this.synthAll();
     this.loops = {};
     this.loops.lgSelf = this.makeLoop(this.buf.lgHum, null, 0.32);
-    this.loops.lgBot = this.makeLoop(this.buf.lgHum, this.makePanner(), 0.5);
+    // Everything positional comes from the bot: one panner follows it, so no nodes are created per sound.
+    this.botPanner = this.makePanner();
+    this.loops.lgBot = this.makeLoop(this.buf.lgHum, this.botPanner, 0.5);
     this.loops.lift = this.makeLoop(this.buf.liftHum, null, 0);
   }
 
@@ -108,22 +110,21 @@ export class Audio {
     return { src, g, panner, level, on: false };
   }
 
-  setLoop(name, on, pos, level) {
+  setLoop(name, on, level) {
     const l = this.loops?.[name];
     if (!l) return;
-    const lv = level ?? l.level;
     if (on !== l.on || level !== undefined) {
-      l.g.gain.setTargetAtTime(on ? lv : 0, this.ctx.currentTime, on ? 0.01 : 0.04);
+      l.g.gain.setTargetAtTime(on ? (level ?? l.level) : 0, this.ctx.currentTime, on ? 0.01 : 0.04);
       l.on = on;
     }
-    if (pos && l.panner) this.place(l.panner, pos);
   }
 
-  place(p, pos) {
+  setBotPosition(x, y, z) {
+    if (!this.botPanner) return;
     const t = this.ctx.currentTime;
-    p.positionX.setValueAtTime(pos.x, t);
-    p.positionY.setValueAtTime(pos.y, t);
-    p.positionZ.setValueAtTime(pos.z, t);
+    this.botPanner.positionX.setTargetAtTime(x, t, 0.01);
+    this.botPanner.positionY.setTargetAtTime(y, t, 0.01);
+    this.botPanner.positionZ.setTargetAtTime(z, t, 0.01);
   }
 
   setListener(pos, fwd) {
@@ -146,7 +147,7 @@ export class Audio {
     }
   }
 
-  play(name, { vol = 1, rate = 1, at = null } = {}) {
+  play(name, { vol = 1, rate = 1, bot = false } = {}) {
     if (!this.ctx || !this.buf[name]) return;
     const src = this.ctx.createBufferSource();
     src.buffer = this.buf[name];
@@ -154,12 +155,7 @@ export class Audio {
     const g = this.ctx.createGain();
     g.gain.value = vol;
     src.connect(g);
-    if (at) {
-      const p = this.makePanner();
-      this.place(p, at);
-      g.connect(p);
-      src.onended = () => p.disconnect();
-    } else g.connect(this.master);
+    g.connect(bot ? this.botPanner : this.master);
     src.start();
   }
 }

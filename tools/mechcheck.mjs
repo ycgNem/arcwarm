@@ -278,6 +278,84 @@ for (const p of layout.pads) {
   check('hitreg: aiming a hitbox-width off misses', off.hits === 0, `${off.hits} hits`);
 }
 
+// Hit registration through the real frame loop: variable frame rates, ticks at 125 Hz, the screen shows the
+// interpolated pose (lerpPose) and the player aims at what's on screen. Perfect aim must land every shot whether the
+// player is standing still or strafing and jumping; aim just inside the box edge must still land; just outside, never.
+{
+  const { Sim, lerpPose } = await import('../src/game/Sim.js');
+  const nav = new NavGrid(flat, { half: 1400, cell: 40 });
+  const run = (fps, lateral, playerMoves) => {
+    const sim = new Sim({ world: flat, nav, difficulty: 'hard', length: 0, seed: 4 });
+    sim.state = 'live';
+    const P = sim.player;
+    const B = sim.bot;
+    placeBody(P.body, 0, 0.5, 300);
+    placeBody(B.body, 0, 0.5, -100);
+    const view = {};
+    const tgt = {};
+    let acc = 0;
+    let t = 0;
+    let frames = 0;
+    // What a frame shows, and where the player puts the crosshair in response.
+    const aimFrame = () => {
+      const alpha = acc / TICK;
+      lerpPose(P, alpha, view);
+      lerpPose(B, alpha, tgt);
+      B.renderPos = tgt;
+      P.renderEye = { x: view.x, y: view.eye, z: view.z };
+      const dx = tgt.x - view.x;
+      const dz = tgt.z - view.z;
+      const d = Math.hypot(dx, dz);
+      const ax = tgt.x + (-dz / d) * lateral;
+      const az = tgt.z + (dx / d) * lateral;
+      P.yaw = Math.atan2(-(ax - view.x), -(az - view.z));
+      P.pitch = Math.atan2(tgt.y + tgt.height * 0.5 - view.eye, Math.hypot(ax - view.x, az - view.z));
+    };
+    aimFrame(); // the countdown renders frames before the beam goes live
+    while (t < 20) {
+      const dt = fps === 'jitter' ? 1 / (50 + Math.random() * 190) : 1 / fps;
+      t += dt;
+      frames++;
+      acc += dt;
+      while (acc >= TICK) {
+        // The bot's beam knockback drifts the dummy; keep it inside LG range so every shot is a fair test.
+        if (Math.hypot(P.body.x - B.body.x, P.body.z - B.body.z) > 600) {
+          placeBody(P.body, B.body.x, P.body.y, B.body.z + 300);
+          Object.assign(P.prev, { x: P.body.x, y: P.body.y, z: P.body.z });
+        }
+        const side = Math.floor(sim.time / 0.4) % 2 ? 1 : -1;
+        sim.tick(TICK, playerMoves ? { wishX: side, wishZ: 0, jump: sim.time % 2 < 0.05, crouch: false, fire: true } : { wishX: 0, wishZ: 0, fire: true });
+        acc -= TICK;
+        B.health = P.health = 100;
+        B.shield = P.shield = 100;
+        B.alive = P.alive = true;
+      }
+      aimFrame();
+    }
+    return { st: P.stats, frames };
+  };
+  const pctOf = (r) => (100 * r.st.hits) / r.st.shots;
+  for (const fps of [60, 144, 240, 'jitter']) {
+    const still = run(fps, 0, false);
+    const moving = run(fps, 0, true);
+    check(`hitreg @${fps} fps: perfect aim = every shot`, still.st.hits === still.st.shots && moving.st.hits === moving.st.shots, `still ${pctOf(still).toFixed(1)}%, strafing+jumping ${pctOf(moving).toFixed(1)}% (${moving.st.shots} shots)`);
+  }
+  const edgeIn = run('jitter', HULL.halfWidth * 0.8, true);
+  const edgeOut = run('jitter', HULL.halfWidth * 2.5, true); // outside the box's corners from any angle at duel range
+  check('hitreg: 0.8× half-width off still hits, 2.5× never', pctOf(edgeIn) === 100 && edgeOut.st.hits === 0, `${pctOf(edgeIn).toFixed(1)}% / ${pctOf(edgeOut).toFixed(1)}%`);
+  check('accuracy counts 20 shots per second held', Math.abs(edgeIn.st.shots - 400) <= 1, `${edgeIn.st.shots} shots in 20 s`);
+}
+
+// --- Settings maths ---
+{
+  const { cmPer360, yawPerCount } = await import('../src/core/Settings.js');
+  const { qlFovToVertical } = await import('../src/core/math.js');
+  const s = { sens: 2, mYaw: 0.022, mPitch: 0.022, dpi: 800 };
+  const counts360 = (2 * Math.PI) / yawPerCount(s);
+  check('sens: QL sens 2 @ 800 dpi = 25.98 cm/360', Math.abs(cmPer360(s) - 25.977) < 0.01, `${cmPer360(s).toFixed(3)} cm, ${counts360.toFixed(1)} counts/360 (QL: 360 / (2 × 0.022) = 8181.8)`);
+  check('fov: cg_fov 90 → 73.74° vertical, 110 → 93.93°', Math.abs(qlFovToVertical(90) - 73.74) < 0.01 && Math.abs(qlFovToVertical(110) - 93.93) < 0.01, `${qlFovToVertical(90).toFixed(2)}° / ${qlFovToVertical(110).toFixed(2)}°`);
+}
+
 // --- White Room: ramps, crouch-jump onto a platform, spawns, nav ---
 {
   const wr = new World(buildWhiteRoomLayout());

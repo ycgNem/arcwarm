@@ -342,12 +342,14 @@ export class ForestVisuals {
       const center = new THREE.Vector3((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2);
       worldUV(geo, uvScale, center);
       if (mat.vertexColors) mossColors(geo, base, mossC, moss);
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.copy(center);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      this.scene.add(mesh);
-      return mesh;
+      geo.translate(center.x, center.y, center.z);
+      batch(mat, geo);
+    };
+    // Static geometry is merged into one mesh per material: a handful of draw calls instead of ~50.
+    const batches = new Map();
+    const batch = (mat, geo) => {
+      if (!batches.has(mat)) batches.set(mat, []);
+      batches.get(mat).push(geo);
     };
 
     for (const b of this.layout.boxes) {
@@ -376,13 +378,16 @@ export class ForestVisuals {
           const geo = new THREE.CylinderGeometry(b.radius + 0.5, b.radius + 0.5, len, 18, 1, false);
           geo.rotateZ(Math.PI / 2);
           this.tex.bark.repeat.set(2, 6);
-          const log = new THREE.Mesh(geo, mats.bark);
-          log.position.set((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2);
-          log.castShadow = log.receiveShadow = true;
-          this.scene.add(log);
+          geo.translate((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2);
+          batch(mats.bark, geo.toNonIndexed());
           break;
         }
       }
+    }
+    for (const [mat, geos] of batches) {
+      const mesh = new THREE.Mesh(mergeGeometries(geos), mat);
+      mesh.castShadow = mesh.receiveShadow = true;
+      this.scene.add(mesh);
     }
   }
 

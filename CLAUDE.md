@@ -17,5 +17,10 @@ Read `PLAN.md` (mechanics table, bot calibration, map, tools) before working.
   triangle diagonal as `Heightfield.heightAt`; ramp wedges are built from the same numbers as their colliders).
 - Ledge reach: plain jump 91 + 18 step = 109, crouch-jump 125, bots climb ≤ 72 (`MOVE.jumpRise`). Size ledges with that.
 - Feel must match QL: sens uses `m_yaw 0.022`, cg_fov is 4:3 horizontal Hor+, raw input via pointer lock `unadjustedMovement`.
+- **No stutter allowed.** Keep the render loop allocation-free (reuse scratch objects), compile new effects in
+  `Game.warmup`, keep world shadows static (set `renderer.shadowMap.needsUpdate` if the world changes), merge static meshes,
+  no point lights, and only write to the DOM when a value changes (`Hud.set`). Re-run the hitch scan described in PLAN.md
+  (drive `arcwarm.frame()` and time each frame with `gl.readPixels`) after visual changes.
+- Hitreg: the player shoots from `renderEye` at `renderPos` (both set by Game from `lerpPose` each frame). Bots use live state.
 - Debug URLs: `?debug=spectate`, `?debug=start`, `&len=<seconds>`, `&map=whiteroom`; `window.arcwarm` is the Game in the console.
 - Tick the checkboxes in `PLAN.md` as stages land.

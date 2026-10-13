@@ -1,5 +1,5 @@
 // Lightning beam: a camera-facing ribbon with a crackling, endpoint-pinned jitter, a soft glow layer, an impact
-// flare and a point light. Drawn from the muzzle to wherever the beam actually stops this frame.
+// flare. (No point light: it would cost every lit pixel on screen.) Drawn from the muzzle to wherever the beam actually stops this frame.
 import * as THREE from 'three';
 
 const N = 32;
@@ -56,8 +56,6 @@ export class Beam {
     this.flare = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
     this.flare.renderOrder = 11;
     scene.add(this.flare);
-    this.light = new THREE.PointLight(color, 0, 260, 1.6);
-    scene.add(this.light);
     this.u = new THREE.Vector3();
     this.v = new THREE.Vector3();
     this.t = 0;
@@ -68,7 +66,6 @@ export class Beam {
   setVisible(on) {
     for (const l of this.layers) l.mesh.visible = on;
     this.flare.visible = on;
-    this.light.intensity = on ? this.light.intensity : 0;
     this.visible = on;
   }
 
@@ -122,7 +119,5 @@ export class Beam {
     const fs = impact ? 34 + Math.random() * 18 : 0;
     this.flare.scale.set(fs, fs, 1);
     this.flare.visible = impact;
-    this.light.position.copy(end).addScaledVector(dir, -12);
-    this.light.intensity = impact ? 5000 + Math.random() * 3000 : 1500;
   }
 }

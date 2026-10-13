@@ -26,7 +26,6 @@ export class Effects {
     this.gibs = [];
     this.gibMat = new THREE.MeshLambertMaterial({ color: 0x7dff3a, emissive: 0x7dff3a, emissiveIntensity: 0.5 });
     this.gibMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), this.gibMat, this.maxGibs);
-    this.gibMesh.castShadow = true;
     this.gibMesh.count = 0;
     this.gibMesh.frustumCulled = false;
     scene.add(this.gibMesh);

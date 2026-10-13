@@ -27,12 +27,41 @@ export class Input {
     addEventListener('contextmenu', (e) => {
       if (this.locked) e.preventDefault();
     });
-    addEventListener('mousemove', (e) => {
-      if (this.locked && this.onLook) this.onLook(e.movementX, e.movementY);
-    });
+    // Mouse look. pointerrawupdate delivers each mouse report as it arrives (not batched to the next frame like
+    // mousemove), so the view is as fresh as possible when the frame renders. Raw counts go straight to the view.
+    this.rawEvents = 'onpointerrawupdate' in window;
+    this.counts = { x: 0, y: 0, events: 0, spikes: 0 };
+    this.rate = { n: 0, t0: performance.now(), hz: 0 };
+    const onMove = (e) => {
+      if (!this.locked || !this.onLook) return;
+      const dx = e.movementX;
+      const dy = e.movementY;
+      if (dx === 0 && dy === 0) return;
+      // Browsers can report one bogus jump right after the pointer locks, and no real report moves this many counts.
+      const cap = this.rawEvents ? 1500 : 6000; // per-report vs per-frame batches
+      if (this.skipNext || Math.abs(dx) > cap || Math.abs(dy) > cap) {
+        this.skipNext = false;
+        this.counts.spikes++;
+        return;
+      }
+      this.counts.x += dx;
+      this.counts.y += dy;
+      this.counts.events++;
+      const r = this.rate;
+      r.n++;
+      const now = performance.now();
+      if (now - r.t0 >= 500) {
+        r.hz = Math.round((r.n * 1000) / (now - r.t0));
+        r.n = 0;
+        r.t0 = now;
+      }
+      this.onLook(dx, dy);
+    };
+    addEventListener(this.rawEvents ? 'pointerrawupdate' : 'mousemove', onMove);
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === this.canvas;
       if (!this.locked) this.down.clear();
+      else this.skipNext = true;
       this.onLockChange?.(this.locked);
     });
   }

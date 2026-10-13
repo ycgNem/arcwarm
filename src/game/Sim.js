@@ -35,6 +35,19 @@ export function makeStats() {
   };
 }
 
+// The pose the renderer shows at `alpha` (0..1) between the previous and current tick. Game draws with this, and
+// the player's beam is tested against exactly this (shooter eye and target box), so hits match the screen.
+export function lerpPose(f, alpha, out) {
+  const p = f.prev;
+  const b = f.body;
+  out.x = p.x + (b.x - p.x) * alpha;
+  out.y = p.y + (b.y - p.y) * alpha;
+  out.z = p.z + (b.z - p.z) * alpha;
+  out.eye = p.y + p.eye + (b.y + eyeHeight(b) - p.y - p.eye) * alpha;
+  out.height = b.height;
+  return out;
+}
+
 export class Fighter {
   constructor(id, name, isBot) {
     this.id = id;
@@ -53,6 +66,7 @@ export class Fighter {
     this.lgTimer = 0;
     this.firing = false;
     this.renderPos = null; // where the opponent last SAW this fighter on screen (favor-the-shooter hit test)
+    this.renderEye = null; // where this (human) fighter's camera was on that same frame
     this.spawnCount = 0;
     this.stats = makeStats();
   }
@@ -121,6 +135,7 @@ export class Sim {
     f.lgTimer = 0;
     f.firing = false;
     f.renderPos = null;
+    f.renderEye = null;
     f.spawnCount++;
     this.events.push({ type: 'spawn', who: f.id });
   }
@@ -165,7 +180,8 @@ export class Sim {
 
     this.fighters.forEach((f, i) => {
       if (!f.alive) return;
-      const out = [];
+      const out = this._moveEvents || (this._moveEvents = []);
+      out.length = 0;
       stepBody(f.body, cmds[i], dt, this.world, this.phys, out);
       for (const e of out) {
         e.who = f.id;
@@ -210,9 +226,11 @@ export class Sim {
 
   fireLG(f, t) {
     const b = f.body;
-    const ox = b.x;
-    const oy = f.eyeY();
-    const oz = b.z;
+    // The player shoots from the camera position they saw; bots from their live eye.
+    const eye = !f.isBot ? f.renderEye : null;
+    const ox = eye ? eye.x : b.x;
+    const oy = eye ? eye.y : f.eyeY();
+    const oz = eye ? eye.z : b.z;
     viewDir(f.yaw, f.pitch, D);
     const wh = this.world.raycast(ox, oy, oz, D.x, D.y, D.z, LG.range);
     const maxT = wh ? wh.t : LG.range;

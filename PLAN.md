@@ -27,7 +27,9 @@ Live: https://ycgnem.github.io/arcwarm/ (GitHub Pages, redeploys on every push t
 | Vitals | 100 shield + 100 health | Shields recharge after 4 s untouched (70/s), then health regens |
 | Lifesteal | Off / Half / Full (default Full) | Each hit heals the shooter by that share of the damage: health first, then shields |
 | Ramps | Axis-aligned wedges | You ride the slope (rests on the highest touching edge, like a Quake box hull). The sides are walls; the beam hits the slope |
-| Hit reg | Your beam tests the bot *where you saw it* (interpolated) | Verified: perfect tracking = 100%, one hitbox-width off = 0% |
+| Hit reg | Your beam leaves the exact camera position you saw and tests the bot box *as drawn on that frame* | Verified through the real frame loop at 60/144/240/jittery fps, standing or strafing+jumping: perfect aim = 100%, 0.8× half-width off = 100%, outside the box = 0% |
+| Accuracy stat | hits ÷ cells fired (QL semantics), exactly 20 shots per second held | Shots at a dead/out-of-range/occluded target count as misses, as in QL |
+| Sensitivity | raw counts × sens × m_yaw, applied the instant the mouse report arrives (`pointerrawupdate`) | Bogus first report after pointer lock and impossible spikes are dropped. **F2 in a match** = 360° test: degrees, counts vs predicted, raw on/off, mouse Hz |
 | Launchers | Grav lift → treehouse, pad → shrine, man cannon south → north | Velocity solved at launch, so they land on target under any gravity |
 
 ## The bot
@@ -72,10 +74,19 @@ LG accuracy (and your best at that level), damage/min, longest unbroken track, a
 breaks, the bot's accuracy on you, and **where your near-misses went** (behind / ahead / below / above the target),
 with a coaching tip. History is kept per browser.
 
+## Performance (measured at 2560×1440, RTX 5070, frames forced to GPU completion)
+- Steady state: ~0.8 ms/frame p50, 1.4 ms p99, ~0.2 ms CPU. 42 s of live fighting at 144 fps had **no frame over 4 ms**
+  (before: a 124 ms spike at match start, 13.5 ms on first fire, 6.6 ms on first shield flash).
+- How: every shader is compiled at map load (`Game.warmup` renders a frame with all effects on); the sun shadow map is
+  baked once per map (`shadowMap.autoUpdate = false`, the bot uses a blob shadow); static geometry is merged per material
+  (9 draw calls for the forest); no point lights; the render loop allocates nothing; the HUD only writes to the DOM when a
+  value changes; bot sounds share one positional panner.
+- The browser caps frames at your monitor's refresh rate (rAF). The sim is a fixed 125 Hz, so feel doesn't depend on fps.
+
 ## Tools
 - `npm run check`: mechanics checks (jump/hang per preset, accel, air control, crouch-jump, stairs, launchers ×
-  gravity presets, trunk slide, walls, boundary, nav connectivity, hit registration, ramps up/down/sides/beam,
-  crouch-jump-only platforms, lifesteal maths).
+  gravity presets, trunk slide, walls, boundary, nav connectivity, hit registration (incl. through the frame loop at
+  several frame rates), sens/FOV maths, ramps up/down/sides/beam, crouch-jump-only platforms, lifesteal maths).
 - `npm run botsim`: bot accuracy vs scripted dodgers + full bot-vs-bot matches on both maps, with and without
   lifesteal (stuck/idle detection).
 - Debug URLs: `?debug=spectate` (bot vs bot from its eyes), `?debug=start` (match without pointer lock), `&len=60`,
@@ -90,6 +101,7 @@ with a coaching tip. History is kept per browser.
 - [x] S5 Map + art: Pinehollow, procedural textures, shadows, ground cover, light shafts, brightskin model, viewmodel
 - [x] S6 Live: GitHub repo + Pages deploy
 - [x] S7 Lifesteal (menu option), ramps in the engine, White Room map, map select, heal glow, history per map
+- [x] S8 Exact hitreg from the rendered camera, raw per-report mouse input + F2 sens test, hitch-free rendering
 
 ## Where things stand (handoff)
 - Everything above is built and committed. `npm run check` passes; `npm run botsim` matches the calibration table.

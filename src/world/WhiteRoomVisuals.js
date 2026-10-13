@@ -1,6 +1,7 @@
 // Dresses the White Room: grid-textured white surfaces, tinted platforms and ramps, soft shadows, open sky.
 // Same interface as ForestVisuals (tex.glow, sun, update).
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as TX from './textures.js';
 
 const SUN_DIR = new THREE.Vector3(0.45, 0.85, 0.3).normalize();
@@ -117,22 +118,29 @@ export class WhiteRoomVisuals {
     floor.receiveShadow = true;
     scene.add(floor);
 
+    // One merged mesh per material (static): a few draw calls for the whole room.
+    const batches = new Map();
+    const batch = (mat, geo) => {
+      if (!batches.has(mat)) batches.set(mat, []);
+      batches.get(mat).push(geo);
+    };
     for (const b of layout.boxes) {
-      let geo = new THREE.BoxGeometry(b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0).toNonIndexed();
+      const geo = new THREE.BoxGeometry(b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0).toNonIndexed();
       geo.computeVertexNormals();
       const center = new THREE.Vector3((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2);
       worldUV(geo, 256, center);
-      const m = new THREE.Mesh(geo, mats[b.kind] || mats.wall);
-      m.position.copy(center);
-      m.castShadow = b.kind !== 'wall';
-      m.receiveShadow = true;
-      scene.add(m);
+      geo.translate(center.x, center.y, center.z);
+      batch(mats[b.kind] || mats.wall, geo);
     }
     for (const r of layout.ramps || []) {
       const geo = rampGeometry(r);
       worldUV(geo, 256, new THREE.Vector3());
-      const m = new THREE.Mesh(geo, mats.ramp);
-      m.castShadow = m.receiveShadow = true;
+      batch(mats.ramp, geo);
+    }
+    for (const [mat, geos] of batches) {
+      const m = new THREE.Mesh(mergeGeometries(geos), mat);
+      m.castShadow = mat !== mats.wall;
+      m.receiveShadow = true;
       scene.add(m);
     }
   }
