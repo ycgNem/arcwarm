@@ -1,0 +1,19 @@
+{
+  "name": "arcwarm",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Low-gravity lightning gun duel warm-up. Quake Live LG tracking with Halo-style gravity.",
+  "author": "jacksonwalley",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10"
+  }
+}
