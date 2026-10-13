@@ -4,6 +4,8 @@ Three.js + Vite, plain JavaScript. Low-gravity Quake Live LG duel warm-up vs a b
 Read `PLAN.md` (mechanics table, bot calibration, map, tools) before working.
 
 - Run with `npm run dev` (port 5200) or `Play.bat`.
+- Live build: https://ycgnem.github.io/arcwarm/ (repo github.com/ycgNem/arcwarm). Every push to `main` redeploys via
+  `.github/workflows/deploy.yml`.
 - **Mechanics are the product.** After touching movement, collision, weapons, the bot or the map, run `npm run check`
   (must all pass) and `npm run botsim` (compare against the table in PLAN.md).
 - Simulation (`src/game/Sim.js`, `Movement.js`, `BotBrain.js`, `src/world/World.js`, `NavGrid.js`, `forestLayout.js`) is pure

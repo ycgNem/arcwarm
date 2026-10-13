@@ -5,6 +5,7 @@ A 2–5 minute aim warm-up you play as a game: a **Quake Live lightning gun duel
 You track while you move and dodge, and the bot's beam punishes predictable movement.
 
 Stack: Three.js 0.186.1 + Vite, plain JavaScript. `Play.bat` / `npm run dev` → http://localhost:5200.
+Live: https://ycgnem.github.io/arcwarm/ (GitHub Pages, redeploys on every push to `main`).
 
 ## Decisions (from you)
 - Mode: duel only (the bot fights back). No separate scenario mode.
@@ -68,5 +69,16 @@ with a coaching tip. History is kept per browser.
 - [x] S3 Bot: aim model, duel movement, A* + launchers, retreating, 5 calibrated levels
 - [x] S4 Match: shields/health, spawns, countdown, timer, death cam, results + coaching, history
 - [x] S5 Map + art: Pinehollow, procedural textures, shadows, ground cover, light shafts, brightskin model, viewmodel
+- [x] S6 Live: GitHub repo + Pages deploy
+
+## Where things stand (handoff)
+- Everything above is built and committed. `npm run check` passes; `npm run botsim` matches the calibration table.
+- **Not yet verified by a human:** raw mouse feel / sens matching in a real pointer-locked session, Esc→pause→resume,
+  procedural sounds, and performance at high resolution/refresh. First job next session: playtest and collect feel notes.
+- Likely tuning knobs after playtest: `src/data/physics.js` (gravity, jump, airAccel, runSpeed), `src/data/weapons.js`
+  (LG damage/knockback), `src/data/match.js` (shield delay/rate), `src/data/bots.js` (per-level reaction/lead/jitter).
+- Known rough edges: the god-ray planes and dust motes are cosmetic and cheap; the menu camera orbits the hollow;
+  bot nav is one height per cell, so it avoids standing on cliff-edge cells (by design).
+
 - [ ] Next ideas: a playtest pass on feel numbers, an optional enemy shield bar, a second bot personality (aggressive rusher),
       a pickup or two (overshield), an Electron build for raw-input-without-browser, recorded replays of your worst misses
