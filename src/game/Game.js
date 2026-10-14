@@ -139,7 +139,10 @@ export class Game {
     this.fx.gibs.length = 0;
     this.fx.update(0, this.groundAt);
     this.botModel.flash = 0;
+    this.botModel.shell.visible = false;
+    this.botModel.shieldMat.opacity = 0;
     this.botModel.update(0, { alive: false }, false);
+    this.hud.hitT = 0;
   }
 
   applySettings() {
@@ -211,6 +214,36 @@ export class Game {
       ${per360.toFixed(1)} counts = 360° at sens ${s.sens} (${cmPer360(s).toFixed(2)} cm @ ${s.dpi} dpi)<br>
       raw input ${i.raw ? '<span style="color:var(--health)">ON</span>' : '<span style="color:var(--danger)">OFF (OS accel may apply)</span>'} ·
       ${i.rawEvents ? 'per-report events' : 'per-frame events'} · ${i.rate.hz} Hz${i.counts.spikes - t.spikes0 ? ` · ${i.counts.spikes - t.spikes0} spikes dropped` : ''}`;
+  }
+
+  // Debug (tools/shots.mjs): freeze a posed moment. Positions are [x, z]; heights come from the map.
+  stage({ p, b, botAir = 0, fire = false, botFire = false, pitchBias = 0 }) {
+    if (!this.sim) this.startMatch();
+    const sim = this.sim;
+    sim.state = 'live';
+    const place = (f, x, z, air) => {
+      const y = this.world.supportHeight(x, z, HULL.halfWidth, 1e6) + air;
+      Object.assign(f.body, { x, y, z, vx: 0, vy: 0, vz: 0, onGround: air === 0, crouched: false, height: HULL.height });
+      Object.assign(f.prev, { x, y, z, eye: HULL.eye });
+      f.alive = true;
+      f.health = f.shield = 100;
+    };
+    const P = sim.player;
+    const B = sim.bot;
+    place(P, p[0], p[1], 0);
+    place(B, b[0], b[1], botAir);
+    const dx = B.body.x - P.body.x;
+    const dz = B.body.z - P.body.z;
+    P.yaw = yawTo(dx, dz);
+    P.pitch = Math.atan2(B.body.y + 30 - P.eyeY(), Math.hypot(dx, dz)) + pitchBias;
+    B.yaw = yawTo(-dx, -dz);
+    B.pitch = -Math.atan2(B.body.y + 30 - P.eyeY(), Math.hypot(dx, dz));
+    P.firing = fire;
+    B.firing = botFire;
+    this.state = 'paused';
+    this.hud.msg.classList.remove('on');
+    for (let i = 0; i < 4; i++) this.renderMatch(1 / 60, 1);
+    return true;
   }
 
   pause() {

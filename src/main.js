@@ -90,7 +90,9 @@ input.onKey = (code, e) => {
 
 let last = performance.now();
 function frame(now) {
-  const dt = Math.min(0.1, (now - last) / 1000);
+  // rAF's timestamp can precede the last performance.now() (first frame especially), so clamp at 0: a negative dt
+  // would run every countdown timer backwards.
+  const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
   last = now;
   game.frame(dt);
   requestAnimationFrame(frame);

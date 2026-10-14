@@ -22,5 +22,6 @@ Read `PLAN.md` (mechanics table, bot calibration, map, tools) before working.
   no point lights, and only write to the DOM when a value changes (`Hud.set`). Re-run the hitch scan described in PLAN.md
   (drive `arcwarm.frame()` and time each frame with `gl.readPixels`) after visual changes.
 - Hitreg: the player shoots from `renderEye` at `renderPos` (both set by Game from `lerpPose` each frame). Bots use live state.
+- Art changes: capture `npm run shots -- before|after` (run outside the sandbox) and compare; keep lime out of the palette so the bot reads.
 - Debug URLs: `?debug=spectate`, `?debug=start`, `&len=<seconds>`, `&map=whiteroom`; `window.arcwarm` is the Game in the console.
 - Tick the checkboxes in `PLAN.md` as stages land.

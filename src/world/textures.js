@@ -222,3 +222,34 @@ export function shaftTexture() {
   g.fillRect(0, 0, 64, 256);
   return toTex(c, { srgb: false });
 }
+
+// A loose scatter of fallen leaves on transparent, near-white so instance colours tint it.
+export function leafLitterTexture() {
+  const [c, g] = canvas(256);
+  for (let i = 0; i < 38; i++) {
+    const r = Math.hypot(R() - 0.5, R() - 0.5);
+    const a = R() * Math.PI * 2;
+    const d = Math.sqrt(R()) * 100;
+    const x = 128 + Math.cos(a) * d;
+    const y = 128 + Math.sin(a) * d;
+    const s = 12 + R() * 10;
+    const v = Math.floor(165 + R() * 90 - r * 40);
+    g.save();
+    g.translate(x, y);
+    g.rotate(R() * Math.PI * 2);
+    g.fillStyle = `rgb(${v},${Math.floor(v * (0.9 + R() * 0.1))},${Math.floor(v * (0.85 + R() * 0.15))})`;
+    g.beginPath();
+    g.moveTo(0, -s);
+    g.quadraticCurveTo(s * 0.95, -s * 0.1, 0, s);
+    g.quadraticCurveTo(-s * 0.95, -s * 0.1, 0, -s);
+    g.fill();
+    g.strokeStyle = 'rgba(60,40,30,0.45)';
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(0, -s);
+    g.lineTo(0, s);
+    g.stroke();
+    g.restore();
+  }
+  return toTex(c);
+}

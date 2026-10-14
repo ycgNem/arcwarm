@@ -60,6 +60,12 @@ the west (stairs + grav lift), a stone shrine on the east knoll (stairs + pad, b
 to the south with the man cannon, a north ridge with boulders. ~44 trunks inside the ring as cover, and a dense
 outer forest. Dirt lanes link the landmarks.
 
+Art (late autumn, golden hour): deep blue-green pines as the backdrop, with gold birches and orange maples (maples are
+drawn from half the layout's birches; same trunk collider). The palette keeps lime out of the scene so the brightskin bot
+pops. Canopies have a vertex gradient and sway in the vertex shader. Leaf-litter decals, pebbles and mushrooms are
+instanced, one draw call each, and all under step height. Falling leaves and dust motes animate entirely on the GPU.
+The clouds are one merged mesh. Visual-only scatter uses its own seeded RNG, so the layout (colliders) is untouched.
+
 ## White Room
 A 1800×1800 grid-textured room with 440-tall walls. North/south platforms (116 high) and east/west wall ledges (72)
 each have an orange ramp. Platforms are out of reach for a plain jump (91 + 18 ledge step = 109) but a crouch-jump makes
@@ -77,6 +83,11 @@ with a coaching tip. History is kept per browser.
 ## Performance (measured at 2560×1440, RTX 5070, frames forced to GPU completion)
 - Steady state: ~0.8 ms/frame p50, 1.4 ms p99, ~0.2 ms CPU. 42 s of live fighting at 144 fps had **no frame over 4 ms**
   (before: a 124 ms spike at match start, 13.5 ms on first fire, 6.6 ms on first shield flash).
+- How to measure (the hitch scan): in the preview, `?debug=start&len=0`, then in the console loop `arcwarm.frame(1/144)` followed by
+  `gl.readPixels(0,0,1,1,…)` (forces GPU completion) and time each iteration at 2560×1440. Also check that `renderer.info.programs.length` and
+  `info.memory.textures` don't change during play (nothing compiles or uploads mid-match). If the machine is busy, compare old vs new
+  visuals interleaved in the same session instead of trusting absolute numbers.
+- Autumn pass (S9), old vs new forest interleaved on a loaded machine: p50 equal or lower (8.0 vs 8.4 ms), 40 vs 41 draw calls, +13k triangles.
 - How: every shader is compiled at map load (`Game.warmup` renders a frame with all effects on); the sun shadow map is
   baked once per map (`shadowMap.autoUpdate = false`, the bot uses a blob shadow); static geometry is merged per material
   (9 draw calls for the forest); no point lights; the render loop allocates nothing; the HUD only writes to the DOM when a
@@ -89,6 +100,8 @@ with a coaching tip. History is kept per browser.
   several frame rates), sens/FOV maths, ramps up/down/sides/beam, crouch-jump-only platforms, lifesteal maths).
 - `npm run botsim`: bot accuracy vs scripted dodgers + full bot-vs-bot matches on both maps, with and without
   lifesteal (stuck/idle detection).
+- `npm run shots -- <label> [map]`: Playwright (installed Chrome, software GL) captures the menu plus fixed staged views into
+  `critique/shots/<label>/` (gitignored) via `arcwarm.stage()`. Use it for before/after art comparisons; critiques live in `critique/*.md`.
 - Debug URLs: `?debug=spectate` (bot vs bot from its eyes), `?debug=start` (match without pointer lock), `&len=60`,
   `&map=whiteroom`.
 
@@ -102,6 +115,8 @@ with a coaching tip. History is kept per browser.
 - [x] S6 Live: GitHub repo + Pages deploy
 - [x] S7 Lifesteal (menu option), ramps in the engine, White Room map, map select, heal glow, history per map
 - [x] S8 Exact hitreg from the rendered camera, raw per-report mouse input + F2 sens test, hitch-free rendering
+- [x] S9 Autumn forest art pass (critic round A: `critique/critic_art_A.md`), screenshot tool, first-frame negative-dt fix
+- [ ] S10 Depth (proposals in `critique/critic_depth_A.md`, core untouched): warm-up stats → ladder rating → bot styles
 
 ## Where things stand (handoff)
 - Everything above is built and committed. `npm run check` passes; `npm run botsim` matches the calibration table.
